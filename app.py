@@ -29,7 +29,7 @@ def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret
 from_airport = "MNL"
 to_airport = "ABJ"
 tier='blue'
-dep_class = "Y" #Y for economy, J for business, F for first class, W premium economy
+dep_class = "W" #Y for economy, J for business, F for first class, W premium economy
 ret_class = "7"
 dep_date = "100924"  # format: DDMMYY
 ret_date = "151024"  # format: DDMMYY# 
@@ -49,22 +49,47 @@ destination = miles_data['getMilesFromCouchbase']['destination']
 cabin = miles_data['getMilesFromCouchbase']['cabin']
 journey_type = miles_data['getMilesFromCouchbase']['journeyType']
 earn_miles = miles_data['getMilesFromCouchbase']['miles']['earn']['skywards']
-
+print(earn_miles)
 # Structuring the data for Excel
 fares = [ 'flexPlus','flex', 'saver', 'special']
 rows = []
 
 for fare in fares:
-    skywards_miles = earn_miles[fare].get('skywardsMiles', 'N/A')
-    tier_miles = earn_miles[fare].get('tierMiles', 'N/A')
+    if dep_class == 'F' and fare in ['saver', 'special']:
+        continue  # skip this iteration
+
+    skywards_miles = (earn_miles.get(fare, {}).get('skywardsMiles') or 'N/A')
+    tier_miles = (earn_miles.get(fare, {}).get('tierMiles') or 'N/A')
+
+    # Format data
+    match cabin:
+        case 'Y':
+            cabin_formatted = 'Economy'
+        case 'J':
+            cabin_formatted = 'Business'
+        case 'F':
+            cabin_formatted = 'First'
+        case 'W':
+            cabin_formatted = 'Premium Economy'
+        case _:  # default case
+            cabin_formatted = 'Unknown'
+
+    match journey_type:
+        case 'OW':
+            journey_type_formatted = 'One Way'
+        case 'RT':
+            journey_type_formatted = 'Round Trip'
+        case _:  # default case
+            journey_type_formatted = 'Unknown'
+
     row = {
-        'Direction': journey_type,
+        'Direction': journey_type_formatted,
         'Airline': 'Emirates',
         'Leaving from': origin,
         'Going to': destination,
-        'Cabin Class': cabin,
-        'Skywards Tier': tier,
-        'Fare': fare.capitalize(),
+        'Cabin Class': cabin_formatted,
+        'Skywards Tier': tier.capitalize(),
+        'Fare':f"{cabin_formatted} {fare.capitalize()}",
         'Skywards Miles': skywards_miles,
         'Tier Miles': tier_miles
     }
