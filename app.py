@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+import time
 
 def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier):
     url = f"https://www.emirates.com/service/ekl/loyalty/calculate-miles?airline=EK&origin={from_airport}&destination={to_airport}&cabin={dep_class}&journeyType=OW&tier={tier}"
@@ -25,76 +26,126 @@ def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret
     response = requests.get(url, headers=headers)
     return response.json()
 
-# Example usage with dynamic input
-from_airport = "MNL"
-to_airport = "ABJ"
-tier='blue'
-dep_class = "W" #Y for economy, J for business, F for first class, W premium economy
-ret_class = "7"
-dep_date = "100924"  # format: DDMMYY
-ret_date = "151024"  # format: DDMMYY# 
-adults = "2"
-ofws = "0"
-children = "0"
-infants = "0"
-teenagers = "0"
-by = "0"
-travel_type = "0"
+# Load the Excel file (replace with your actual Excel file path)
+file_path = 'input/input.xlsx'
 
-miles_data = calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier)
+# Read the Excel file into a DataFrame
+df = pd.read_excel(file_path)
 
-# Extracting the relevant data
-origin = miles_data['getMilesFromCouchbase']['origin']
-destination = miles_data['getMilesFromCouchbase']['destination']
-cabin = miles_data['getMilesFromCouchbase']['cabin']
-journey_type = miles_data['getMilesFromCouchbase']['journeyType']
-earn_miles = miles_data['getMilesFromCouchbase']['miles']['earn']['skywards']
-print(earn_miles)
-# Structuring the data for Excel
-fares = [ 'flexPlus','flex', 'saver', 'special']
 rows = []
+# Loop through each row in the DataFrame
+for index, row in df.iterrows():
+    time.sleep(2)
+    # Accessing each column's value in the current row
+    one_way_or_roundtrip = row['oneWayOrRoundtrip']
+    flying_with = row['flyingWith']
+    leaving_from = row['leavingFrom']
+    going_to = row['goingTo']
+    cabin_class = row['cabinClass']
+    emirates_skywards_tier = row['emiratesSkywardsTier']
 
-for fare in fares:
-    if dep_class == 'F' and fare in ['saver', 'special']:
-        continue  # skip this iteration
-
-    skywards_miles = (earn_miles.get(fare, {}).get('skywardsMiles') or 'N/A')
-    tier_miles = (earn_miles.get(fare, {}).get('tierMiles') or 'N/A')
-
-    # Format data
-    match cabin:
-        case 'Y':
-            cabin_formatted = 'Economy'
-        case 'J':
-            cabin_formatted = 'Business'
-        case 'F':
-            cabin_formatted = 'First'
-        case 'W':
-            cabin_formatted = 'Premium Economy'
+    print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - Scraping...")
+    #Y for economy, J for business, F for first class, W premium economy
+    match cabin_class:
+        case 'Economy':
+            dep_class = 'Y'
+        case 'Business':
+            dep_class = 'J'
+        case 'First':
+            dep_class = 'F'
+        case 'Premium Economy':
+            dep_class = 'W'
         case _:  # default case
-            cabin_formatted = 'Unknown'
+            dep_class = 'Unknown'
 
-    match journey_type:
-        case 'OW':
-            journey_type_formatted = 'One Way'
-        case 'RT':
-            journey_type_formatted = 'Round Trip'
-        case _:  # default case
-            journey_type_formatted = 'Unknown'
+    # Constant Parameters Except Date
+    ret_class = "7"
+    dep_date = "100924"  # format: DDMMYY
+    ret_date = "151024"  # format: DDMMYY# 
+    adults = "2"
+    ofws = "0"
+    children = "0"
+    infants = "0"
+    teenagers = "0"
+    by = "0"
+    travel_type = "0"
 
-    row = {
-        'Direction': journey_type_formatted,
-        'Airline': 'Emirates',
-        'Leaving from': origin,
-        'Going to': destination,
-        'Cabin Class': cabin_formatted,
-        'Skywards Tier': tier.capitalize(),
-        'Fare':f"{cabin_formatted} {fare.capitalize()}",
-        'Skywards Miles': skywards_miles,
-        'Tier Miles': tier_miles
-    }
-    rows.append(row)
+    miles_data = calculate_miles(leaving_from, going_to, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, emirates_skywards_tier.lower())
 
+    # print(miles_data)
+
+    # Extracting the relevant data
+    origin = miles_data['getMilesFromCouchbase']['origin']
+    destination = miles_data['getMilesFromCouchbase']['destination']
+    cabin = miles_data['getMilesFromCouchbase']['cabin']
+    journey_type = miles_data['getMilesFromCouchbase']['journeyType']
+
+    if emirates_skywards_tier.lower() == 'blue':
+        tier = 'skywards'
+    else:
+        tier = emirates_skywards_tier.lower()
+    
+    earn_miles = miles_data['getMilesFromCouchbase']['miles']['earn'][tier]
+    # Structuring the data for Excel
+    fares = [ 'flexPlus','flex', 'saver', 'special']
+
+    for fare in fares:
+        if dep_class == 'F' and fare in ['saver', 'special']:
+            continue  # skip this iteration
+
+        skywards_miles = (earn_miles.get(fare, {}).get('skywardsMiles') or 'N/A')
+        tier_miles = (earn_miles.get(fare, {}).get('tierMiles') or 'N/A')
+
+        # Format data
+        match cabin:
+            case 'Y':
+                cabin_formatted = 'Economy'
+            case 'J':
+                cabin_formatted = 'Business'
+            case 'F':
+                cabin_formatted = 'First'
+            case 'W':
+                cabin_formatted = 'Premium Economy'
+            case _:  # default case
+                cabin_formatted = 'Unknown'
+
+        match journey_type:
+            case 'OW':
+                journey_type_formatted = 'One Way'
+            case 'RT':
+                journey_type_formatted = 'Round Trip'
+            case _:  # default case
+                journey_type_formatted = 'Unknown'
+        
+        if cabin_formatted == "Premium Economy":
+            formatted_fare = f"{fare.capitalize()}"
+        else:
+            formatted_fare = f"{cabin_formatted} {fare.capitalize()}"
+
+        if str(skywards_miles).isdigit():
+            skywards_miles = int(skywards_miles)
+        else:
+            skywards_miles = skywards_miles
+
+        if str(tier_miles).isdigit():
+            tier_miles = int(tier_miles)
+        else:
+            tier_miles = tier_miles
+
+        row = {
+            'Direction': journey_type_formatted,
+            'Airline': 'Emirates',
+            'Leaving from': origin,
+            'Going to': destination,
+            'Cabin Class': cabin_formatted,
+            'Skywards Tier': emirates_skywards_tier.capitalize(),
+            'Fare':formatted_fare,
+            'Skywards Miles': skywards_miles,
+            'Tier Miles': tier_miles
+        }
+        rows.append(row)
+
+    print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - Scraped Successfully!")
 # Creating a DataFrame
 df = pd.DataFrame(rows)
 
