@@ -1,8 +1,11 @@
 import requests
 import pandas as pd
 import time
+from fp.fp import FreeProxy
+from urllib3.exceptions import MaxRetryError
+from requests.exceptions import SSLError, ConnectionError
 
-def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier):
+def calculate_miles(proxies, from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier):
     url = f"https://www.emirates.com/service/ekl/loyalty/calculate-miles?airline=EK&origin={from_airport}&destination={to_airport}&cabin={dep_class}&journeyType=OW&tier={tier}"
 
     # Update the cookie dynamically with provided parameters
@@ -23,20 +26,68 @@ def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret
         'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
     }
 
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, proxies=proxies, timeout=10, verify=True)
     return response.json()
 
-# Load the Excel file (replace with your actual Excel file path)
-file_path = 'input/input.xlsx'
+def get_valid_proxy(url, max_retries=5):
+    retries = 0
+    proxy = None
+    
+    while retries < max_retries:
+        try:
+            # Get a random proxy
+            proxy = FreeProxy(timeout=1, rand=True).get()
+            print(f"Trying proxy: {proxy}")
+            
+            # Set up the proxies for requests
+            proxies = {
+                'http': proxy,
+                'https': proxy,
+            }
+            
+            # Attempt to make a request with the proxy
+            response = requests.get(url, proxies=proxies, timeout=5, verify=True)  # SSL verification enabled
+            response.raise_for_status()  # Raise an HTTPError if the status is 4xx/5xx
+            
+            # If successful, return the proxy
+            print(f"Valid proxy found: {proxy}")
+            return proxy
+        
+        except (SSLError, ConnectionError, MaxRetryError) as e:
+            print(f"Proxy failed ({e}), retrying... ({retries + 1}/{max_retries})")
+            retries += 1
+            
+    # If no valid proxy was found after retries
+    raise Exception("Max retries exceeded. Could not find a valid proxy.")
 
-# Read the Excel file into a DataFrame
-df = pd.read_excel(file_path)
+def get_cabin_code(cabin_class):
+    cabin_mapping = {
+        'Economy': 'Y',
+        'Business': 'J',
+        'First': 'F',
+        'Premium Economy': 'W'
+    }
+    return cabin_mapping.get(cabin_class, 'Unknown')
 
-rows = []
-# Loop through each row in the DataFrame
-for index, row in df.iterrows():
-    time.sleep(2)
-    # Accessing each column's value in the current row
+# Function to get cabin name from code
+def format_cabin_name(cabin_code):
+    cabin_mapping = {
+        'Y': 'Economy',
+        'J': 'Business',
+        'F': 'First',
+        'W': 'Premium Economy'
+    }
+    return cabin_mapping.get(cabin_code, 'Unknown')
+
+# Function to handle fare formatting
+def format_fare(cabin_formatted, fare):
+    if cabin_formatted == "Premium Economy":
+        return f"{fare.capitalize()}"
+    return f"{cabin_formatted} {fare.capitalize()}"
+
+# Function to process each row of the DataFrame
+def process_row(row, proxies):
+    # Access row values
     one_way_or_roundtrip = row['oneWayOrRoundtrip']
     flying_with = row['flyingWith']
     leaving_from = row['leavingFrom']
@@ -45,23 +96,11 @@ for index, row in df.iterrows():
     emirates_skywards_tier = row['emiratesSkywardsTier']
 
     print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - Scraping...")
-    #Y for economy, J for business, F for first class, W premium economy
-    match cabin_class:
-        case 'Economy':
-            dep_class = 'Y'
-        case 'Business':
-            dep_class = 'J'
-        case 'First':
-            dep_class = 'F'
-        case 'Premium Economy':
-            dep_class = 'W'
-        case _:  # default case
-            dep_class = 'Unknown'
 
-    # Constant Parameters Except Date
+    dep_class = get_cabin_code(cabin_class)
     ret_class = "7"
-    dep_date = "100924"  # format: DDMMYY
-    ret_date = "151024"  # format: DDMMYY# 
+    dep_date = "100924"
+    ret_date = "151024"
     adults = "2"
     ofws = "0"
     children = "0"
@@ -70,87 +109,128 @@ for index, row in df.iterrows():
     by = "0"
     travel_type = "0"
 
-    miles_data = calculate_miles(leaving_from, going_to, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, emirates_skywards_tier.lower())
+    # Prepare parameters for the request
+    # params = {
+    #     'headers': {
+    #         'User-Agent': 'Mozilla/5.0'
+    #     },
+    #     'leaving_from': leaving_from,
+    #     'going_to': going_to,
+    #     'dep_class': dep_class,
+    #     'ret_class': ret_class,
+    #     'dep_date': dep_date,
+    #     'ret_date': ret_date,
+    #     'adults': adults,
+    #     'ofws': ofws,
+    #     'children': children,
+    #     'infants': infants,
+    #     'teenagers': teenagers,
+    #     'by': by,
+    #     'travel_type': travel_type
+    # }
 
-    # print(miles_data)
+    # Get miles data
+    miles_data = calculate_miles(proxies, leaving_from, going_to, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, emirates_skywards_tier.lower())
+    if not miles_data:
+        print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - No data found.")
+        return None  # Skip if no data
 
-    # Extracting the relevant data
+    
+    print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - Scraped successfully!")
+    return process_miles_data(miles_data, emirates_skywards_tier)
+
+# Function to process miles data
+def process_miles_data(miles_data, tier):
+    # Extract relevant data
     origin = miles_data['getMilesFromCouchbase']['origin']
     destination = miles_data['getMilesFromCouchbase']['destination']
     cabin = miles_data['getMilesFromCouchbase']['cabin']
     journey_type = miles_data['getMilesFromCouchbase']['journeyType']
 
-    if emirates_skywards_tier.lower() == 'blue':
+    if tier.lower() == 'blue':
         tier = 'skywards'
     else:
-        tier = emirates_skywards_tier.lower()
-    
-    earn_miles = miles_data['getMilesFromCouchbase']['miles']['earn'][tier]
-    # Structuring the data for Excel
-    fares = [ 'flexPlus','flex', 'saver', 'special']
+        tier = tier.lower()
+
+    earn_miles = (miles_data.get('getMilesFromCouchbase', {})
+                  .get('miles', {})
+                  .get('earn', {})
+                  .get(tier, None))
+
+    # Define fares to iterate over
+    fares = ['flexPlus', 'flex', 'saver', 'special']
+    rows = []
 
     for fare in fares:
-        if dep_class == 'F' and fare in ['saver', 'special']:
-            continue  # skip this iteration
+        if cabin == 'F' and fare in ['saver', 'special']:
+            continue  # Skip invalid fare combinations
 
-        skywards_miles = (earn_miles.get(fare, {}).get('skywardsMiles') or 'N/A')
-        tier_miles = (earn_miles.get(fare, {}).get('tierMiles') or 'N/A')
+        skywards_miles, tier_miles = extract_miles(earn_miles, fare)
 
-        # Format data
-        match cabin:
-            case 'Y':
-                cabin_formatted = 'Economy'
-            case 'J':
-                cabin_formatted = 'Business'
-            case 'F':
-                cabin_formatted = 'First'
-            case 'W':
-                cabin_formatted = 'Premium Economy'
-            case _:  # default case
-                cabin_formatted = 'Unknown'
-
-        match journey_type:
-            case 'OW':
-                journey_type_formatted = 'One Way'
-            case 'RT':
-                journey_type_formatted = 'Round Trip'
-            case _:  # default case
-                journey_type_formatted = 'Unknown'
-        
-        if cabin_formatted == "Premium Economy":
-            formatted_fare = f"{fare.capitalize()}"
-        else:
-            formatted_fare = f"{cabin_formatted} {fare.capitalize()}"
-
-        if str(skywards_miles).isdigit():
-            skywards_miles = int(skywards_miles)
-        else:
-            skywards_miles = skywards_miles
-
-        if str(tier_miles).isdigit():
-            tier_miles = int(tier_miles)
-        else:
-            tier_miles = tier_miles
+        # Format cabin and fare
+        cabin_formatted = format_cabin_name(cabin)
+        formatted_fare = format_fare(cabin_formatted, fare)
 
         row = {
-            'Direction': journey_type_formatted,
+            'Direction': 'One Way',
             'Airline': 'Emirates',
             'Leaving from': origin,
             'Going to': destination,
             'Cabin Class': cabin_formatted,
-            'Skywards Tier': emirates_skywards_tier.capitalize(),
-            'Fare':formatted_fare,
+            'Skywards Tier': tier.capitalize(),
+            'Fare': formatted_fare,
             'Skywards Miles': skywards_miles,
             'Tier Miles': tier_miles
         }
         rows.append(row)
+    return rows
 
-    print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - Scraped Successfully!")
-# Creating a DataFrame
-df = pd.DataFrame(rows)
+# Function to extract miles from the data
+def extract_miles(earn_miles, fare):
+    if not earn_miles:
+        return 'None', 'None'
+    
+    skywards_miles = earn_miles.get(fare, {}).get('skywardsMiles', 'N/A')
+    tier_miles = earn_miles.get(fare, {}).get('tierMiles', 'N/A')
 
-# Saving the DataFrame to an Excel file
-output_file = 'data/skywards_miles_data.xlsx'
-df.to_excel(output_file, index=False)
+    if str(skywards_miles).isdigit():
+        skywards_miles = int(skywards_miles)
 
-print(f"Data saved to {output_file}")
+    if str(tier_miles).isdigit():
+        tier_miles = int(tier_miles)
+
+    return skywards_miles, tier_miles
+
+# Main execution logic
+def main():
+    # Load Excel file
+    file_path = 'input/input.xlsx'
+    df = pd.read_excel(file_path)
+    rows = []
+
+    # Get valid proxy
+    url = "https://www.emirates.com/ph/english/skywards/miles-calculator/"
+    proxy = get_valid_proxy(url, max_retries=10)
+    
+    if proxy:
+        proxies = {'http': proxy, 'https': proxy}
+    else:
+        proxies = {}
+
+    # Process each row in the DataFrame
+    try:
+        for index, row in df.iterrows():
+            time.sleep(1)
+            processed_rows = process_row(row, proxies)
+            if processed_rows:
+                rows.extend(processed_rows)
+    except Exception as e:
+        print(f"Error processing row {index}: {e}")
+    finally:
+        # Save data to Excel
+        output_file = 'data/skywards_miles_data.xlsx'
+        pd.DataFrame(rows).to_excel(output_file, index=False)
+        print(f"Data saved to {output_file}")
+
+if __name__ == "__main__":
+    main()
