@@ -95,12 +95,14 @@ def process_row(row, proxies):
     going_to = row['goingTo']
     cabin_class = row['cabinClass']
     emirates_skywards_tier = row['emiratesSkywardsTier']
+    now = datetime.now()
+    input_date = now.strftime("%d%m%Y")
 
     print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - Scraping...")
 
     dep_class = get_cabin_code(cabin_class)
     ret_class = "7"
-    dep_date = "100924"
+    dep_date = input_date
     ret_date = "151024"
     adults = "2"
     ofws = "0"
@@ -220,7 +222,7 @@ def save_and_format_excel(dataframe, file_path):
     """
     # Save DataFrame to Excel file using pandas
     with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-        dataframe.to_excel(writer, index=False, sheet_name='Sheet1')
+        dataframe.to_excel(writer, index=False, sheet_name='Earn')
     
     # Load the workbook and select the active sheet
     wb = load_workbook(file_path)
@@ -263,16 +265,16 @@ def save_and_format_excel(dataframe, file_path):
 # Main execution logic
 def main():
 
-    route_num = "5"
-    route = "LHR"
+    route_num = "6"
+    route = "EWR"
     batch = "1"
 
     start_time = time.time()
     now = datetime.now()
-    formatted_date = now.strftime("%m%d%Y")
-
+    formatted_date = now.strftime("%m%d%Y_%H%M")
+    
     # Load Excel file
-    file_path = 'input/input.xlsx'
+    file_path = f'input/inputData_{route}{batch}.xlsx'
     df = pd.read_excel(file_path)
     rows = []
 
@@ -296,14 +298,22 @@ def main():
         print(f"Error processing row {index}: {e}")
     finally:
         # Save data to Excel
-        output_file = f'data/EKS_{route}_{formatted_date}_{batch}.xlsx'
+        output_file = f'data/{route_num} EKS_{route}_{formatted_date}_{batch}.xlsx'
         save_and_format_excel(pd.DataFrame(rows), output_file)
         print(f"Data saved to {output_file}")
 
     end_time = time.time()
     
     execution_time = end_time - start_time
-    print(f"Execution time: {execution_time} seconds")
+    
+    if execution_time < 60:
+        print(f"Execution time: {execution_time:.2f} seconds")
+    elif execution_time < 3600:
+        minutes = execution_time / 60
+        print(f"Execution time: {minutes:.2f} minutes")
+    else:
+        hours = execution_time / 3600
+        print(f"Execution time: {hours:.2f} hours")
 
 if __name__ == "__main__":
     main()
