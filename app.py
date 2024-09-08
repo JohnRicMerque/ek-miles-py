@@ -1,6 +1,7 @@
 import requests
 import pandas as pd
 import time
+from datetime import datetime
 from fp.fp import FreeProxy
 from urllib3.exceptions import MaxRetryError
 from requests.exceptions import SSLError, ConnectionError
@@ -46,7 +47,7 @@ def get_valid_proxy(url, max_retries=5):
             }
             
             # Attempt to make a request with the proxy
-            response = requests.get(url, proxies=proxies, timeout=5, verify=True)  # SSL verification enabled
+            response = requests.get(url, proxies=proxies, timeout=30, verify=True)  # SSL verification enabled
             response.raise_for_status()  # Raise an HTTPError if the status is 4xx/5xx
             
             # If successful, return the proxy
@@ -171,6 +172,11 @@ def process_miles_data(miles_data, tier):
         cabin_formatted = format_cabin_name(cabin)
         formatted_fare = format_fare(cabin_formatted, fare)
 
+        if tier.lower() == 'skywards':
+            tier = 'blue'
+        else:
+            tier = tier.lower()
+
         row = {
             'Direction': 'One Way',
             'Airline': 'Emirates',
@@ -188,6 +194,7 @@ def process_miles_data(miles_data, tier):
 # Function to extract miles from the data
 def extract_miles(earn_miles, fare):
     if not earn_miles:
+        print("Route does not exist or miles data is not available.")
         return 'None', 'None'
     
     skywards_miles = earn_miles.get(fare, {}).get('skywardsMiles', 'N/A')
@@ -201,8 +208,69 @@ def extract_miles(earn_miles, fare):
 
     return skywards_miles, tier_miles
 
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Font
+
+def save_and_format_excel(dataframe, file_path):
+    """
+    Save a DataFrame to an Excel file and apply formatting.
+    
+    :param dataframe: The DataFrame to save.
+    :param file_path: Path to the output Excel file.
+    """
+    # Save DataFrame to Excel file using pandas
+    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+        dataframe.to_excel(writer, index=False, sheet_name='Sheet1')
+    
+    # Load the workbook and select the active sheet
+    wb = load_workbook(file_path)
+    ws = wb.active
+
+    # Bold the headers
+    header_row = ws[1]  # Assumes headers are in the first row
+    for cell in header_row:
+        cell.font = Font(bold=True)
+
+    # Align all cells to the left
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(horizontal='left')
+
+    # Autofit column widths (approximation)
+    for col in ws.columns:
+        max_length = 0
+        column_letter = col[0].column_letter  # Get the column letter
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        adjusted_width = max_length + 2  # Add a little extra space
+        ws.column_dimensions[column_letter].width = adjusted_width
+
+    # Autofit row heights (approximation)
+    for row in ws.iter_rows():
+        max_height = 0
+        for cell in row:
+            if cell.value:
+                max_height = max(max_height, len(str(cell.value)) // 10)  # Rough estimate
+        ws.row_dimensions[row[0].row].height = max_height * 15  # Adjust factor as needed
+
+    # Save the workbook with changes
+    wb.save(file_path)
+
 # Main execution logic
 def main():
+
+    route_num = "5"
+    route = "LHR"
+    batch = "1"
+
+    start_time = time.time()
+    now = datetime.now()
+    formatted_date = now.strftime("%m%d%Y")
+
     # Load Excel file
     file_path = 'input/input.xlsx'
     df = pd.read_excel(file_path)
@@ -228,9 +296,14 @@ def main():
         print(f"Error processing row {index}: {e}")
     finally:
         # Save data to Excel
-        output_file = 'data/skywards_miles_data.xlsx'
-        pd.DataFrame(rows).to_excel(output_file, index=False)
+        output_file = f'data/EKS_{route}_{formatted_date}_{batch}.xlsx'
+        save_and_format_excel(pd.DataFrame(rows), output_file)
         print(f"Data saved to {output_file}")
+
+    end_time = time.time()
+    
+    execution_time = end_time - start_time
+    print(f"Execution time: {execution_time} seconds")
 
 if __name__ == "__main__":
     main()
