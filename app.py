@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font
+from tkinter import ttk 
 
 def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier):
     url = f"https://www.emirates.com/service/ekl/loyalty/calculate-miles?airline=EK&origin={from_airport}&destination={to_airport}&cabin={dep_class}&journeyType=OW&tier={tier}"
@@ -214,107 +215,200 @@ def extract_miles(earn_miles, fare):
 
     return skywards_miles, tier_miles
 
-def save_and_format_excel(dataframe, file_path):
+def save_and_format_excel(dataframe, default_filename):
     """
     Save a DataFrame to an Excel file and apply formatting.
     
     :param dataframe: The DataFrame to save.
     :param file_path: Path to the output Excel file.
     """
-    # Save DataFrame to Excel file using pandas
-    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-        dataframe.to_excel(writer, index=False, sheet_name='Earn')
-    
-    # Load the workbook and select the active sheet
-    wb = load_workbook(file_path)
-    ws = wb.active
 
-    # Bold the headers
-    header_row = ws[1]  # Assumes headers are in the first row
-    for cell in header_row:
-        cell.font = Font(bold=True)
+     # Open a save file dialog with a default filename
+    save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", 
+                                                filetypes=[("Excel files", "*.xlsx")],
+                                                initialfile=default_filename)
+    if save_path:
+        # Save the processed DataFrame to the user-defined path
+        # Save DataFrame to Excel file using pandas
+        with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+            dataframe.to_excel(writer, index=False, sheet_name='Earn')
+        
+        # Load the workbook and select the active sheet
+        wb = load_workbook(save_path)
+        ws = wb.active
 
-    # Align all cells to the left
-    for row in ws.iter_rows():
-        for cell in row:
-            cell.alignment = Alignment(horizontal='left')
+        # Bold the headers
+        header_row = ws[1]  # Assumes headers are in the first row
+        for cell in header_row:
+            cell.font = Font(bold=True)
 
-    # Autofit column widths (approximation)
-    for col in ws.columns:
-        max_length = 0
-        column_letter = col[0].column_letter  # Get the column letter
-        for cell in col:
-            try:
+        # Align all cells to the left
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.alignment = Alignment(horizontal='left')
+
+        # Autofit column widths (approximation)
+        for col in ws.columns:
+            max_length = 0
+            column_letter = col[0].column_letter  # Get the column letter
+            for cell in col:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+            adjusted_width = max_length + 2  # Add a little extra space
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+        # Autofit row heights (approximation)
+        for row in ws.iter_rows():
+            max_height = 0
+            for cell in row:
                 if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = max_length + 2  # Add a little extra space
-        ws.column_dimensions[column_letter].width = adjusted_width
+                    max_height = max(max_height, len(str(cell.value)) // 10)  # Rough estimate
+            ws.row_dimensions[row[0].row].height = max_height * 15  # Adjust factor as needed
 
-    # Autofit row heights (approximation)
-    for row in ws.iter_rows():
-        max_height = 0
-        for cell in row:
-            if cell.value:
-                max_height = max(max_height, len(str(cell.value)) // 10)  # Rough estimate
-        ws.row_dimensions[row[0].row].height = max_height * 15  # Adjust factor as needed
+        # Save the workbook with changes
+        wb.save(save_path)
+        messagebox.showinfo("Success", f"File saved successfully: {save_path}")
+    else:
+        messagebox.showwarning("Warning", "Save cancelled.")
+    
 
-    # Save the workbook with changes
-    wb.save(file_path)
+# Main function to handle file selection and processing
+def select_file():
+    global df
+    # Open a file dialog to choose the Excel file
+    file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+    
+    if file_path:
+        try:
+            # Create DataFrame from the selected Excel file
+            df = pd.read_excel(file_path)
+            messagebox.showinfo("Success", f"File loaded successfully: {file_path}")
+            progress_bar['value'] = 0
+            progress_label.config(text="File loaded. Ready to scrape.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Error loading file: {e}")
+    else:
+        messagebox.showwarning("Warning", "No file selected.")
+
+def scrape_data():
+    global df
+    if df is None:
+        messagebox.showwarning("Warning", "No file loaded. Please select an Excel file first.")
+        return
+    
+    try:
+        progress_bar['value'] = 0
+        progress_label.config(text="Scraping is currently in progress...")
+        
+        # Get total number of rows
+        total_rows = df.shape[0]
+        if total_rows == 0:
+            messagebox.showwarning("Warning", "No rows in the selected file.")
+            return
+
+        rows = []
+        now = datetime.now()
+        route_num = "6"
+        route = "EWR"
+        batch = "1"
+        formatted_date = now.strftime("%m%d%Y_%H%M")
+
+        # Get valid proxy
+        # url = "https://www.emirates.com/ph/english/skywards/miles-calculator/"
+        # proxy = get_valid_proxy(url, max_retries=10)
+        
+        # if proxy:
+        #     proxies = {'http': proxy, 'https': proxy}
+        # else:
+        #     proxies = {}
+
+        # Process each row in the DataFrame
+        try:
+            for index, row in df.iterrows():
+                time.sleep(1)
+                processed_rows = process_row(row)
+                if processed_rows:
+                    rows.extend(processed_rows)
+                progress = ((index + 1) / total_rows) * 100
+                progress_bar['value'] = progress
+                root.update_idletasks()  # Update the GUI
+
+        except Exception as e:
+            print(f"Error processing row {index}: {e}")
+        finally:
+            # Save data to Excel
+            progress_label.config(text="Scraping complete...")
+            # global end_time
+            end_time = time.time()
+            execution_time = end_time - start_time
+            
+            if execution_time < 60:
+                print(f"Execution time: {execution_time:.2f} seconds")
+                progress_label.config(text=f"Execution time: {execution_time:.2f} seconds")
+            elif execution_time < 3600:
+                minutes = execution_time / 60
+                print(f"Execution time: {minutes:.2f} minutes")
+                progress_label.config(text=f"Execution time: {minutes:.2f} minutes")
+            else:
+                hours = execution_time / 3600
+                print(f"Execution time: {hours:.2f} hours")
+                progress_label.config(text=f"Execution time: {hours:.2f} hours")
+            default_filename = f'{route_num} EKS_{route}_{formatted_date}_{batch}.xlsx'
+            save_and_format_excel(pd.DataFrame(rows), default_filename)
+    except Exception as e:
+        messagebox.showerror("Error", f"Error processing or saving file: {e}")
+
 
 # Main execution logic
 def main():
+    # Set up the main tkinter window
+    global root
+    root = tk.Tk()
+    root.title("EK Miles Scraper")
 
-    route_num = "6"
-    route = "EWR"
-    batch = "test"
+    # Set window size
+    root.geometry("600x300")
 
+    df = None
+    
+    global start_time
     start_time = time.time()
-    now = datetime.now()
-    formatted_date = now.strftime("%m%d%Y_%H%M")
-    
+
+    # Add a label and the first button to select the file
+    label = tk.Label(root, text="EK Miles Scraper")
+    label.pack(pady=10)
+
+    # Button to select the file
+    select_button = tk.Button(root, text="Select Excel File", command=select_file)
+    select_button.pack(pady=10)
+
+    # Button to scrape/process data (this will be enabled only after selecting the file)
+    scrape_button = tk.Button(root, text="Scrape", command=scrape_data)
+    scrape_button.pack(pady=10)
+
+    # Progress bar widget
+    global progress_bar
+    progress_bar = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate")
+    progress_bar.pack(pady=10)
+
+    # Progress label widget to display the status of the scraping
+    global progress_label
+    progress_label = tk.Label(root, text="Waiting for file...")
+    progress_label.pack(pady=5)
+
+    time_label = tk.Label(root, text="")
+    progress_label.pack(pady=5)
+
+    # Run the tkinter event loop
+    root.mainloop()
     # Load Excel file
-    file_path = f'input/inputData_{route}{batch}.xlsx'
-    df = pd.read_excel(file_path)
-    rows = []
+    # file_path = f'input/inputData_{route}{batch}.xlsx'
+    # df = pd.read_excel(file_path)
 
-    # Get valid proxy
-    url = "https://www.emirates.com/ph/english/skywards/miles-calculator/"
-    # proxy = get_valid_proxy(url, max_retries=10)
-    
-    # if proxy:
-    #     proxies = {'http': proxy, 'https': proxy}
-    # else:
-    #     proxies = {}
 
-    # Process each row in the DataFrame
-    try:
-        for index, row in df.iterrows():
-            time.sleep(1)
-            processed_rows = process_row(row)
-            if processed_rows:
-                rows.extend(processed_rows)
-    except Exception as e:
-        print(f"Error processing row {index}: {e}")
-    finally:
-        # Save data to Excel
-        output_file = f'data/{route_num} EKS_{route}_{formatted_date}_{batch}.xlsx'
-        save_and_format_excel(pd.DataFrame(rows), output_file)
-        print(f"Data saved to {output_file}")
-
-    end_time = time.time()
-    
-    execution_time = end_time - start_time
-    
-    if execution_time < 60:
-        print(f"Execution time: {execution_time:.2f} seconds")
-    elif execution_time < 3600:
-        minutes = execution_time / 60
-        print(f"Execution time: {minutes:.2f} minutes")
-    else:
-        hours = execution_time / 3600
-        print(f"Execution time: {hours:.2f} hours")
 
 if __name__ == "__main__":
     main()
