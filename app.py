@@ -297,7 +297,7 @@ def scrape_data():
         rows = []
         now = datetime.now()
         route_num = "6"
-        route = "EWR"
+        route = "[RouteCode]"
         batch = "1"
         formatted_date = now.strftime("%m%d%Y_%H%M")
 
@@ -353,52 +353,39 @@ def start_scraping_thread():
 
 # Main execution logic
 def main():
+    global root, scrape_button, progress_bar, progress_label, start_time
+
     # Set up the main tkinter window
-    global root
     root = tk.Tk()
     root.title("EK Miles Scraper")
 
-    # Set window size
+    # Set window size and background color
     root.geometry("600x300")
+    root.configure(bg="white")
 
-    df = None
-    
-    global start_time
     start_time = time.time()
 
-    # Add a label and the first button to select the file
-    label = tk.Label(root, text="EK Miles Scraper")
-    label.pack(pady=10)
+    # Add a label with custom font and colors
+    label = tk.Label(root, text="EK Miles Scraper", font=("Arial", 24, "bold"), bg="white", fg="red")
+    label.pack(pady=20)
 
     # Button to select the file
-    select_button = tk.Button(root, text="Select Excel File", command=select_file)
+    select_button = tk.Button(root, text="Select File", command=select_file, width=20)
     select_button.pack(pady=10)
 
-    global scrape_button
-    # Button to scrape/process data (this will be enabled only after selecting the file)
-    scrape_button = tk.Button(root, text="Scrape", command=start_scraping_thread, state=tk.DISABLED)
+    # Initially, the scrape button is disabled
+    scrape_button = tk.Button(root, text="Scrape", command=start_scraping_thread, state=tk.DISABLED, width=20)
     scrape_button.pack(pady=10)
 
     # Progress bar widget
-    global progress_bar
-    progress_bar = ttk.Progressbar(root, orient="horizontal", length=300, mode="determinate")
-    progress_bar.pack(pady=10)
+    progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate")
+    progress_bar.pack(pady=20)
 
     # Progress label widget to display the status of the scraping
-    global progress_label
     progress_label = tk.Label(root, text="Waiting for file...")
-    progress_label.pack(pady=5)
+    progress_label.pack(pady=10)
 
-    time_label = tk.Label(root, text="")
-    progress_label.pack(pady=5)
-
-    # Run the tkinter event loop
     root.mainloop()
-    # Load Excel file
-    # file_path = f'input/inputData_{route}{batch}.xlsx'
-    # df = pd.read_excel(file_path)
-
-
 
 if __name__ == "__main__":
     main()
