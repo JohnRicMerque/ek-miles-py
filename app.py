@@ -126,15 +126,18 @@ def process_row(row):
 
     
     print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - Scraped successfully!")
-    return process_miles_data(miles_data, emirates_skywards_tier)
+    return process_miles_data(leaving_from, going_to, cabin_class, miles_data, emirates_skywards_tier)
 
 # Function to process miles data
-def process_miles_data(miles_data, tier):
+def process_miles_data(leaving_from, going_to, cabin_class, miles_data, tier):
     # Extract relevant data
-    origin = miles_data['getMilesFromCouchbase']['origin']
-    destination = miles_data['getMilesFromCouchbase']['destination']
-    cabin = miles_data['getMilesFromCouchbase']['cabin']
-    journey_type = miles_data['getMilesFromCouchbase']['journeyType']
+    # origin = miles_data['getMilesFromCouchbase']['origin']
+    origin = leaving_from
+    # destination = miles_data['getMilesFromCouchbase']['destination']
+    destination = going_to
+    # cabin = miles_data['getMilesFromCouchbase']['cabin']
+    cabin = cabin_class
+    # journey_type = miles_data['getMilesFromCouchbase']['journeyType']
 
     if tier.lower() == 'blue':
         tier = 'skywards'
@@ -151,13 +154,13 @@ def process_miles_data(miles_data, tier):
     rows = []
 
     for fare in fares:
-        if cabin == 'F' and fare in ['saver', 'special']:
+        if cabin == 'First' and fare in ['saver', 'special']:
             continue  # Skip invalid fare combinations
 
         skywards_miles, tier_miles = extract_miles(earn_miles, fare)
 
         # Format cabin and fare
-        cabin_formatted = format_cabin_name(cabin)
+        cabin_formatted = cabin
         formatted_fare = format_fare(cabin_formatted, fare)
 
         if tier.lower() == 'skywards':
