@@ -5,8 +5,12 @@ from datetime import datetime
 from fp.fp import FreeProxy
 from urllib3.exceptions import MaxRetryError
 from requests.exceptions import SSLError, ConnectionError
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Font
 
-def calculate_miles(proxies, from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier):
+def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier):
     url = f"https://www.emirates.com/service/ekl/loyalty/calculate-miles?airline=EK&origin={from_airport}&destination={to_airport}&cabin={dep_class}&journeyType=OW&tier={tier}"
 
     # Update the cookie dynamically with provided parameters
@@ -27,7 +31,7 @@ def calculate_miles(proxies, from_airport, to_airport, dep_date, ret_date, dep_c
         'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36'
     }
 
-    response = requests.get(url, headers=headers, proxies=proxies, timeout=10, verify=True)
+    response = requests.get(url, headers=headers, timeout=60, verify=True)
     return response.json()
 
 def get_valid_proxy(url, max_retries=5):
@@ -87,7 +91,7 @@ def format_fare(cabin_formatted, fare):
     return f"{cabin_formatted} {fare.capitalize()}"
 
 # Function to process each row of the DataFrame
-def process_row(row, proxies):
+def process_row(row):
     # Access row values
     one_way_or_roundtrip = row['oneWayOrRoundtrip']
     flying_with = row['flyingWith']
@@ -133,7 +137,7 @@ def process_row(row, proxies):
     # }
 
     # Get miles data
-    miles_data = calculate_miles(proxies, leaving_from, going_to, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, emirates_skywards_tier.lower())
+    miles_data = calculate_miles(leaving_from, going_to, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, emirates_skywards_tier.lower())
     if not miles_data:
         print(f"{leaving_from} - {going_to} - {cabin_class} - {emirates_skywards_tier} - No data found.")
         return None  # Skip if no data
@@ -196,7 +200,7 @@ def process_miles_data(miles_data, tier):
 # Function to extract miles from the data
 def extract_miles(earn_miles, fare):
     if not earn_miles:
-        print("Route does not exist or miles data is not available.")
+        print(f"{fare}: Route does not exist or miles data is not available.")
         return 'None', 'None'
     
     skywards_miles = earn_miles.get(fare, {}).get('skywardsMiles', 'N/A')
@@ -209,9 +213,6 @@ def extract_miles(earn_miles, fare):
         tier_miles = int(tier_miles)
 
     return skywards_miles, tier_miles
-
-from openpyxl import load_workbook
-from openpyxl.styles import Alignment, Font
 
 def save_and_format_excel(dataframe, file_path):
     """
@@ -267,7 +268,7 @@ def main():
 
     route_num = "6"
     route = "EWR"
-    batch = "1"
+    batch = "test"
 
     start_time = time.time()
     now = datetime.now()
@@ -280,18 +281,18 @@ def main():
 
     # Get valid proxy
     url = "https://www.emirates.com/ph/english/skywards/miles-calculator/"
-    proxy = get_valid_proxy(url, max_retries=10)
+    # proxy = get_valid_proxy(url, max_retries=10)
     
-    if proxy:
-        proxies = {'http': proxy, 'https': proxy}
-    else:
-        proxies = {}
+    # if proxy:
+    #     proxies = {'http': proxy, 'https': proxy}
+    # else:
+    #     proxies = {}
 
     # Process each row in the DataFrame
     try:
         for index, row in df.iterrows():
             time.sleep(1)
-            processed_rows = process_row(row, proxies)
+            processed_rows = process_row(row)
             if processed_rows:
                 rows.extend(processed_rows)
     except Exception as e:
