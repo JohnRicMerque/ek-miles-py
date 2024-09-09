@@ -313,7 +313,7 @@ def scrape_data():
         # Process each row in the DataFrame
         try:
             for index, row in df.iterrows():
-                time.sleep(1)
+                time.sleep(4)
                 processed_rows = process_row(row)
                 if processed_rows:
                     rows.extend(processed_rows)
