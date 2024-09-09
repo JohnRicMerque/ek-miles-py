@@ -9,7 +9,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font
-from tkinter import ttk 
+from tkinter import ttk
+import threading 
 
 def calculate_miles(from_airport, to_airport, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, tier):
     url = f"https://www.emirates.com/service/ekl/loyalty/calculate-miles?airline=EK&origin={from_airport}&destination={to_airport}&cabin={dep_class}&journeyType=OW&tier={tier}"
@@ -116,26 +117,6 @@ def process_row(row):
     teenagers = "0"
     by = "0"
     travel_type = "0"
-
-    # Prepare parameters for the request
-    # params = {
-    #     'headers': {
-    #         'User-Agent': 'Mozilla/5.0'
-    #     },
-    #     'leaving_from': leaving_from,
-    #     'going_to': going_to,
-    #     'dep_class': dep_class,
-    #     'ret_class': ret_class,
-    #     'dep_date': dep_date,
-    #     'ret_date': ret_date,
-    #     'adults': adults,
-    #     'ofws': ofws,
-    #     'children': children,
-    #     'infants': infants,
-    #     'teenagers': teenagers,
-    #     'by': by,
-    #     'travel_type': travel_type
-    # }
 
     # Get miles data
     miles_data = calculate_miles(leaving_from, going_to, dep_date, ret_date, dep_class, ret_class, adults, ofws, children, infants, teenagers, by, travel_type, emirates_skywards_tier.lower())
@@ -288,6 +269,7 @@ def select_file():
             messagebox.showinfo("Success", f"File loaded successfully: {file_path}")
             progress_bar['value'] = 0
             progress_label.config(text="File loaded. Ready to scrape.")
+            scrape_button.config(state=tk.NORMAL)
         except Exception as e:
             messagebox.showerror("Error", f"Error loading file: {e}")
     else:
@@ -361,6 +343,10 @@ def scrape_data():
     except Exception as e:
         messagebox.showerror("Error", f"Error processing or saving file: {e}")
 
+# Function to start the scraping process in a new thread
+def start_scraping_thread():
+    scrape_thread = threading.Thread(target=scrape_data)
+    scrape_thread.start()
 
 # Main execution logic
 def main():
@@ -385,8 +371,9 @@ def main():
     select_button = tk.Button(root, text="Select Excel File", command=select_file)
     select_button.pack(pady=10)
 
+    global scrape_button
     # Button to scrape/process data (this will be enabled only after selecting the file)
-    scrape_button = tk.Button(root, text="Scrape", command=scrape_data)
+    scrape_button = tk.Button(root, text="Scrape", command=start_scraping_thread, state=tk.DISABLED)
     scrape_button.pack(pady=10)
 
     # Progress bar widget
