@@ -24,29 +24,6 @@ This tool streamlines data collection by automating what would typically take mo
 
 ---
 
-## ⚡ Installation
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/frequent-flyer-miles-scraper.git
-   cd frequent-flyer-miles-scraper
-````
-
-2. **Create and activate a virtual environment**
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # Mac/Linux
-   venv\Scripts\activate      # Windows
-   ```
-
-3. **Install dependencies**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
-
 ## ▶️ Usage
 
 1. **Prepare input file**: Create an Excel file containing routes and parameters:
