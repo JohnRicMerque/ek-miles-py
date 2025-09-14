@@ -69,8 +69,6 @@ This tool streamlines data collection by automating what would typically take mo
 ---
 
 ## ⚠️ Disclaimer
-
-This project is intended **for educational and research purposes only**.
 Use responsibly and ensure compliance with the target website’s Terms of Service.
 
 ---
@@ -82,8 +80,3 @@ Use responsibly and ensure compliance with the target website’s Terms of Servi
 💼 [Portfolio](https://johnricmerque.vercel.app)
 
 ---
-
-```
-
-Would you like me to also **generate a `requirements.txt`** for this so your repo is plug-and-play, or keep dependencies listed only in the README?
-```
